@@ -1,3 +1,5 @@
+// ABOUTME: Runs in-page to extract article content and show save toasts.
+// ABOUTME: Handles extraction requests and user selection lookups.
 // Content script - runs on every page
 // Handles article extraction and highlight detection
 
@@ -12,11 +14,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse(null);
     });
     return true; // Keep channel open for async response
-  } else if (request.action === 'getSelection') {
+  }
+  if (request.action === 'getSelection') {
     const selection = window.getSelection().toString().trim();
     sendResponse({ selection });
+    return false;
   }
-  return true;
+  return false;
 });
 
 async function extractArticle() {

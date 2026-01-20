@@ -1,3 +1,5 @@
+// ABOUTME: Runs the extension service worker for Stash.
+// ABOUTME: Handles context menus, messaging, and saves.
 // Background service worker
 // Handles context menus and saving
 
@@ -18,6 +20,26 @@ chrome.runtime.onStartup.addListener(() => {
 async function initSupabase() {
   supabase = new SupabaseClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
   await supabase.init();
+}
+
+async function getSignedInUserId() {
+  const user = await supabase.getUser();
+  if (!user?.id) {
+    throw new Error('Sign in required');
+  }
+  return user.id;
+}
+
+async function sendToast(tabId, message, isError = false) {
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'showToast',
+      message,
+      isError,
+    });
+  } catch (err) {
+    console.warn('Toast delivery failed:', err);
+  }
 }
 
 // Context menu for "Save highlight to Stash"
@@ -51,8 +73,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // Save highlighted text
 async function saveHighlight(tab, selectionText) {
   try {
+    const userId = await getSignedInUserId();
     await supabase.insert('saves', {
-      user_id: CONFIG.USER_ID,
+      user_id: userId,
       url: tab.url,
       title: tab.title,
       highlight: selectionText,
@@ -60,17 +83,10 @@ async function saveHighlight(tab, selectionText) {
       source: 'extension',
     });
 
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'showToast',
-      message: 'Highlight saved!',
-    });
+    await sendToast(tab.id, 'Highlight saved!');
   } catch (err) {
     console.error('Save highlight failed:', err);
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'showToast',
-      message: 'Failed to save: ' + err.message,
-      isError: true,
-    });
+    await sendToast(tab.id, 'Failed to save: ' + err.message, true);
   }
 }
 
@@ -104,8 +120,9 @@ async function savePage(tab) {
     }
 
     console.log('Inserting into Supabase...');
+    const userId = await getSignedInUserId();
     const result = await supabase.insert('saves', {
-      user_id: CONFIG.USER_ID,
+      user_id: userId,
       url: tab.url,
       title: article.title,
       content: article.content,
@@ -118,17 +135,10 @@ async function savePage(tab) {
     });
     console.log('Insert result:', result);
 
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'showToast',
-      message: 'Page saved!',
-    });
+    await sendToast(tab.id, 'Page saved!');
   } catch (err) {
     console.error('Save page failed:', err);
-    chrome.tabs.sendMessage(tab.id, {
-      action: 'showToast',
-      message: 'Failed to save: ' + err.message,
-      isError: true,
-    });
+    await sendToast(tab.id, 'Failed to save: ' + err.message, true);
   }
 }
 
@@ -180,6 +190,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
       if (!supabase) await initSupabase();
       try {
+        await getSignedInUserId();
         const saves = await supabase.select('saves', {
           order: 'created_at.desc',
           limit: 10,

@@ -1,3 +1,5 @@
+// ABOUTME: Powers the extension popup UI for authentication and saves.
+// ABOUTME: Shows recent saves and triggers page saves via messaging.
 // Popup script
 document.addEventListener('DOMContentLoaded', async () => {
   const authView = document.getElementById('auth-view');
@@ -11,9 +13,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const savesList = document.getElementById('saves-list');
   const openAppLink = document.getElementById('open-app-link');
 
-  // Single-user mode - skip auth, go straight to main view
-  showMainView();
-  loadRecentSaves();
+  const userResponse = await chrome.runtime.sendMessage({ action: 'getUser' });
+  if (userResponse?.user?.id) {
+    showMainView();
+    loadRecentSaves();
+  } else {
+    showAuthView();
+  }
 
   function showAuthView() {
     authView.classList.remove('hidden');
@@ -117,6 +123,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load recent saves
   async function loadRecentSaves() {
     const response = await chrome.runtime.sendMessage({ action: 'getRecentSaves' });
+
+    if (!response.success && response.error === 'Sign in required') {
+      showAuthView();
+      return;
+    }
 
     if (!response.success || !response.saves?.length) {
       savesList.innerHTML = '<p class="empty">No saves yet. Save your first page!</p>';

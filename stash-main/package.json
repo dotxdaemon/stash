@@ -1,0 +1,9 @@
+{
+  "name": "stash",
+  "private": true,
+  "scripts": {
+    "test": "node extension/tests/extension-consistency.test.js",
+    "lint": "node extension/tests/extension-consistency.test.js",
+    "typecheck": "node extension/tests/extension-consistency.test.js"
+  }
+}
